@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+/* Proven — BNB black & gold. A warm gold/amber accretion glow on near-black,
+   matching BNB Chain's actual brand yellow (#F0B90B). Glassmorphism panels. */
+@theme {
+  --color-bg: #0a0908;
+  --color-fg: #f3efe6;
+  --color-muted: #9c968a;
+  --color-border: #211d16;
+
+  /* Token names kept as "violet/magenta/indigo" for low-risk reuse across
+     components (every bg-violet/text-violet/border-violet utility below
+     repaints automatically) — the VALUES are BNB gold, not purple. */
+  --color-violet: #f0b90b; /* BNB Yellow — primary brand */
+  --color-magenta: #ff9900; /* warm amber-orange — gradient secondary */
+  --color-indigo: #ffe066; /* pale gold highlight — gradient tertiary */
+  --color-blue: #c98a3a; /* muted bronze — rare "info" accent */
+  --color-amber: #ffb454; /* warning (kept distinct from brand gold) */
+  --color-pos: #2ee6a6;
+  --color-neg: #ff5c78;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  min-height: 100vh;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2013 transparent;
+}
+
+/* ── animations ─────────────────────────────────────────────────────────── */
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+@keyframes spin-rev { to { transform: rotate(-360deg); } }
+@keyframes drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.75; }
+  50% { transform: translate3d(2%, -2%, 0) scale(1.08); opacity: 1; }
+}
+@keyframes gradient-pan { to { background-position: 200% center; } }
+@keyframes pulse-soft { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+/* ── utilities ──────────────────────────────────────────────────────────── */
+.text-cosmic {
+  background: linear-gradient(
+    90deg,
+    var(--color-violet),
+    var(--color-magenta),
+    var(--color-indigo),
+    var(--color-violet)
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gradient-pan 6s linear infinite;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-strong {
+  background: rgba(14, 12, 8, 0.62);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glow-violet { box-shadow: 0 12px 48px -14px rgba(240, 185, 11, 0.55); }
+.glow-hover { transition: box-shadow 0.35s ease, border-color 0.35s ease, transform 0.35s ease; }
+.glow-hover:hover { box-shadow: 0 18px 60px -16px rgba(240, 185, 11, 0.5); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
