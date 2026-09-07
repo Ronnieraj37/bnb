@@ -6,6 +6,9 @@ import { CATEGORIES } from "./types";
 // Smart Chain mainnet — there is no local catalogue and no fallback dataset, so
 // if the registry is unreachable the UI says exactly that.
 
+export type SortKey = "score" | "feedback" | "newest";
+export type BrowseFilters = { x402?: boolean; reviews?: boolean };
+
 export type BrowseResult = {
   agents: Agent[];
   indexed: number;
@@ -17,9 +20,28 @@ export type BrowseResult = {
 
 const CATS = Object.keys(CATEGORIES) as Category[];
 
+/** Apply user-chosen filters and sort to a list of agents. Pure, data-driven. */
+function applyView(agents: Agent[], sort: SortKey = "score", filters: BrowseFilters = {}): Agent[] {
+  let out = agents;
+  if (filters.x402) out = out.filter((a) => a.x402);
+  if (filters.reviews) out = out.filter((a) => a.feedbackCount > 0);
+  const sorted = [...out];
+  if (sort === "feedback") {
+    sorted.sort((a, b) => b.feedbackCount - a.feedbackCount || b.averageScore - a.averageScore || b.score - a.score);
+  } else if (sort === "newest") {
+    const t = (a: Agent) => (a.provenance.createdAt ? Date.parse(a.provenance.createdAt) : 0);
+    sorted.sort((a, b) => t(b) - t(a));
+  } else {
+    sorted.sort((a, b) => b.score - a.score);
+  }
+  return sorted;
+}
+
 export async function browse(opts: {
   category?: Category;
   search?: string;
+  sort?: SortKey;
+  filters?: BrowseFilters;
 } = {}): Promise<BrowseResult> {
   if (!scanEnabled()) {
     return { agents: [], indexed: 0, error: "SCAN_API_KEY is not configured." };
@@ -28,10 +50,10 @@ export async function browse(opts: {
   try {
     if (opts.search?.trim()) {
       const page = await listAgents({ search: opts.search, limit: 60 });
-      const agents = opts.category
+      const filtered = opts.category
         ? page.agents.filter((a) => a.category === opts.category)
         : page.agents;
-      return { agents, indexed: page.total, isMatchCount: true };
+      return { agents: applyView(filtered, opts.sort, opts.filters), indexed: page.total, isMatchCount: true };
     }
 
     const { byCategory, indexed } = await catalogue();
@@ -50,11 +72,11 @@ export async function browse(opts: {
       }),
     );
 
-    const agents = opts.category
+    const base = opts.category
       ? byCategory[opts.category].slice(0, 48)
-      : CATS.flatMap((c) => byCategory[c].slice(0, 9)).sort((a, b) => b.score - a.score);
+      : CATS.flatMap((c) => byCategory[c].slice(0, 12));
 
-    return { agents, indexed, featured };
+    return { agents: applyView(base, opts.sort, opts.filters), indexed, featured };
   } catch (e) {
     const msg =
       e instanceof ScanError

@@ -1,7 +1,7 @@
-import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import {
-  ArrowLeft, ShieldCheck, ExternalLink, Star,
+  ShieldCheck, ExternalLink, Star, AlertTriangle,
   MessageSquare, Boxes, Activity, Globe,
 } from "lucide-react";
 import { getAgent } from "@/lib/agents";
@@ -11,12 +11,33 @@ import { timeAgo, shortAddr } from "@/lib/format";
 import { looksReadOnly } from "@/lib/mcp/client";
 import { ScoreRing } from "@/components/score-ring";
 import { Reveal } from "@/components/reveal";
+import { SiteHeader } from "@/components/site-header";
 import { AgentInterface } from "@/components/agent-interface";
+import { StrategyDemoSection } from "@/components/strategy-demo-section";
 import { TrackRecord } from "@/components/track-record";
 import { HireButton } from "@/components/hire-button";
 import { CompareCheckbox } from "@/components/compare-checkbox";
 
 const BSCSCAN = "https://bscscan.com";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const agent = await getAgent(decodeURIComponent(id)).catch(() => null);
+  if (!agent) return { title: "Agent not found — Proven" };
+  const cat = CATEGORIES[agent.category];
+  const desc = agent.description?.slice(0, 155) || `A ${cat.label} agent on BNB Smart Chain. See how it trades, its on-chain track record, and hire it with a scoped, revocable session.`;
+  const title = `${agent.name} — ${cat.label} agent on BSC | Proven`;
+  return {
+    title,
+    description: desc,
+    openGraph: { title, description: desc, type: "website" as const },
+    twitter: { card: "summary" as const, title, description: desc },
+  };
+}
 
 export default async function AgentPage({
   params,
@@ -28,77 +49,65 @@ export default async function AgentPage({
   if (!agent) notFound();
 
   const cat = CATEGORIES[agent.category];
-  const context = await marketContext(agent.category);
   const tools = agent.capabilities.flatMap((c) => c.tools);
   const writeTools = tools.filter((t) => !looksReadOnly(t));
   const b = agent.breakdown;
 
   return (
     <div className="mx-auto max-w-6xl px-5 pb-24">
-      <header className="sticky top-3 z-50 mt-3 flex items-center justify-between rounded-2xl glass-strong px-5 py-3">
-        <Link href="/" className="flex items-center gap-2 text-sm text-muted transition hover:text-fg">
-          <ArrowLeft size={16} /> Marketplace
-        </Link>
-        <Link href="/" className="text-cosmic text-lg font-semibold">◆ Proven</Link>
-      </header>
+      <SiteHeader variant="back" />
 
-      {/* Identity */}
+      {/* Identity hero */}
       <Reveal>
-        <section className="mt-6 flex flex-col gap-4 rounded-2xl glass-strong p-6 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-4">
-            <ScoreRing score={agent.score} rank={agent.rank} size={68} />
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span>{cat.emoji}</span>
-                <h1 className="text-2xl font-semibold tracking-tight">{agent.name}</h1>
-                {agent.x402 && (
-                  <span className="rounded bg-violet/15 px-1.5 py-0.5 text-[10px] font-semibold text-violet">
-                    x402
-                  </span>
-                )}
-                <CompareCheckbox entry={{ id: agent.id, name: agent.name, category: agent.category }} />
-              </div>
-              <p className="mt-1.5 text-sm text-muted">
-                {cat.label} · token #{agent.tokenId} ·{" "}
-                <span className="text-[12px]">matched on “{agent.categoryEvidence}”</span>
-              </p>
-              <div className="mt-2 flex flex-wrap gap-3 text-[12px]">
-                <a
-                  href={`${BSCSCAN}/token/${agent.contract}?a=${agent.tokenId}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-violet hover:underline"
-                >
-                  Registry NFT <ExternalLink size={11} />
-                </a>
-                {agent.provenance.txHash && (
-                  <a
-                    href={`${BSCSCAN}/tx/${agent.provenance.txHash}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-violet hover:underline"
-                  >
-                    Registration tx <ExternalLink size={11} />
-                  </a>
-                )}
-                {agent.agentWallet && (
-                  <a
-                    href={`${BSCSCAN}/address/${agent.agentWallet}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-violet hover:underline"
-                  >
-                    Agent wallet {shortAddr(agent.agentWallet)} <ExternalLink size={11} />
-                  </a>
-                )}
+        <section className="card relative mt-6 overflow-hidden p-6 sm:p-7">
+          {/* accent glow, tinted per category */}
+          <span
+            className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full opacity-40 blur-3xl"
+            style={{ background: `radial-gradient(circle, ${cat.accent}, transparent 65%)` }}
+          />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-start gap-5">
+              <ScoreRing score={agent.score} rank={agent.rank} size={88} />
+              <div className="min-w-0">
+                <span className="pill" style={{ background: `${cat.accent}1f`, color: cat.accent }}>
+                  <span>{cat.emoji}</span> {cat.label}
+                </span>
+                <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{agent.name}</h1>
+                <p className="mt-1.5 text-sm text-muted">
+                  Token <span className="font-mono text-fg/80">#{agent.tokenId}</span>
+                  <span className="mx-1.5">·</span>
+                  matched on “{agent.categoryEvidence}”
+                </p>
+
+                {/* quick-signal badges */}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {agent.health?.verified ? (
+                    <Badge tone="pos"><span className="h-1.5 w-1.5 rounded-full bg-pos" /> Endpoint live</Badge>
+                  ) : agent.health?.error ? (
+                    <Badge tone="neg"><AlertTriangle size={11} /> Endpoint offline</Badge>
+                  ) : null}
+                  {agent.x402 && <Badge tone="violet">x402 payments</Badge>}
+                  {agent.feedbackCount > 0 && <Badge tone="muted"><Star size={11} /> {agent.averageScore.toFixed(1)} · {agent.feedbackCount}</Badge>}
+                  <CompareCheckbox entry={{ id: agent.id, name: agent.name, category: agent.category }} />
+                </div>
+
+                {/* provenance links */}
+                <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[12px]">
+                  <ProvLink href={`${BSCSCAN}/token/${agent.contract}?a=${agent.tokenId}`}>Registry NFT</ProvLink>
+                  {agent.provenance.txHash && <ProvLink href={`${BSCSCAN}/tx/${agent.provenance.txHash}`}>Registration tx</ProvLink>}
+                  {agent.agentWallet && <ProvLink href={`${BSCSCAN}/address/${agent.agentWallet}`}>Wallet {shortAddr(agent.agentWallet)}</ProvLink>}
+                </div>
               </div>
             </div>
+            <HireButton agentId={agent.id} agentName={agent.name} category={agent.category} writeTools={writeTools} />
           </div>
-          <HireButton agentName={agent.name} writeTools={writeTools} />
         </section>
       </Reveal>
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="flex flex-col gap-5 lg:col-span-2">
           <Reveal>
-            <section className="rounded-2xl glass p-5">
+            <section className="card p-5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Overview</h2>
               <p className="mt-2 whitespace-pre-line text-fg/90">
                 {agent.description || "This agent published no description to the registry."}
@@ -115,11 +124,26 @@ export default async function AgentPage({
             </section>
           </Reveal>
 
+          {/* See it work — a live, self-running demo of the strategy on real
+              BNB/USDT price, grounded in the agent's real wallet size and live
+              venue rates. This is the "understand what it does" moment. */}
+          <Reveal delay={0.04}>
+            <Suspense fallback={<CardSkeleton title="See it work" lines={4} />}>
+              <StrategyDemoSection
+                category={agent.category}
+                wallet={agent.agentWallet}
+                venue={agent.protocols[0]}
+              />
+            </Suspense>
+          </Reveal>
+
           {/* The real proof — reconstructed on-chain track record: money in/out,
               what it trades through, and profit where honestly derivable. */}
           {agent.agentWallet && (
             <Reveal delay={0.05}>
-              <TrackRecord wallet={agent.agentWallet} />
+              <Suspense fallback={<CardSkeleton title="Track record" lines={3} />}>
+                <TrackRecord wallet={agent.agentWallet} />
+              </Suspense>
             </Reveal>
           )}
 
@@ -139,41 +163,20 @@ export default async function AgentPage({
             </div>
           </Reveal>
 
-          {/* Category-relevant live market */}
-          {context && (
-            <Reveal delay={0.1}>
-              <section className="rounded-2xl glass p-5">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-                  {context.heading}
-                </h2>
-                <p className="mb-3 mt-1 text-[13px] text-muted">{context.note}</p>
-                <div className="divide-y divide-white/5">
-                  {context.pools.map((p) => (
-                    <div key={`${p.project}-${p.symbol}`} className="flex items-center justify-between py-2 text-sm">
-                      <div className="min-w-0">
-                        <div className="truncate text-fg">{p.symbol}</div>
-                        <div className="text-[11px] text-muted">{p.project}</div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <div className="font-mono text-pos">{p.apy.toFixed(2)}%</div>
-                        <div className="text-[11px] text-muted">
-                          ${(p.tvlUsd / 1e6).toFixed(1)}M TVL
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p className="mt-2 text-[11px] text-muted">Live from DeFiLlama.</p>
-              </section>
-            </Reveal>
-          )}
+          {/* Category-relevant live market — streamed so it never blocks the
+              page shell from painting. */}
+          <Reveal delay={0.1}>
+            <Suspense fallback={<CardSkeleton title="Live market" lines={4} />}>
+              <MarketSection category={agent.category} />
+            </Suspense>
+          </Reveal>
         </div>
 
         <div className="flex flex-col gap-5">
           {/* Score breakdown */}
           {b && (
             <Reveal delay={0.1}>
-              <section className="rounded-2xl glass p-5">
+              <section className="card p-5">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
                   Score breakdown
                 </h2>
@@ -195,7 +198,7 @@ export default async function AgentPage({
 
           {/* Reputation */}
           <Reveal delay={0.14}>
-            <section className="rounded-2xl glass p-5">
+            <section className="card p-5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
                 Reputation
               </h2>
@@ -238,6 +241,62 @@ export default async function AgentPage({
         </div>
       </div>
     </div>
+  );
+}
+
+async function MarketSection({ category }: { category: Parameters<typeof marketContext>[0] }) {
+  const context = await marketContext(category);
+  if (!context) return null;
+  return (
+    <section className="card p-5">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{context.heading}</h2>
+      <p className="mb-3 mt-1 text-[13px] text-muted">{context.note}</p>
+      <div className="divide-y divide-white/5">
+        {context.pools.map((p) => (
+          <div key={`${p.project}-${p.symbol}`} className="flex items-center justify-between py-2 text-sm">
+            <div className="min-w-0">
+              <div className="truncate text-fg">{p.symbol}</div>
+              <div className="text-[11px] text-muted">{p.project}</div>
+            </div>
+            <div className="shrink-0 text-right">
+              <div className="font-mono text-pos">{p.apy.toFixed(2)}%</div>
+              <div className="text-[11px] text-muted">${(p.tvlUsd / 1e6).toFixed(1)}M TVL</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] text-muted">Live from DeFiLlama.</p>
+    </section>
+  );
+}
+
+function Badge({ children, tone }: { children: React.ReactNode; tone: "pos" | "neg" | "violet" | "muted" }) {
+  const c =
+    tone === "pos" ? "border-pos/30 bg-pos/10 text-pos"
+    : tone === "neg" ? "border-neg/30 bg-neg/10 text-neg"
+    : tone === "violet" ? "border-violet/30 bg-violet/10 text-violet"
+    : "border-white/10 bg-white/[0.03] text-muted";
+  return <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium ${c}`}>{children}</span>;
+}
+
+function ProvLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-muted transition hover:text-violet">
+      {children} <ExternalLink size={11} />
+    </a>
+  );
+}
+
+function CardSkeleton({ title, lines = 3 }: { title: string; lines?: number }) {
+  return (
+    <section className="card p-5">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{title}</h2>
+      <div className="mt-3 space-y-2">
+        {Array.from({ length: lines }).map((_, i) => (
+          <div key={i} className="h-3 rounded bg-white/5 animate-[pulse-soft_1.6s_ease-in-out_infinite]" style={{ width: `${90 - i * 12}%` }} />
+        ))}
+      </div>
+    </section>
   );
 }
 

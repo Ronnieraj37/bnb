@@ -1,11 +1,12 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { browse, countByCategory, categoryTotals } from "@/lib/agents";
-import type { Category } from "@/lib/agents/types";
+import type { Category, SortKey } from "@/lib/agents";
 import { CATEGORIES } from "@/lib/agents/types";
 import { AgentCard } from "@/components/agent-card";
+import { SiteHeader } from "@/components/site-header";
 import { CategoryNav } from "@/components/category-nav";
+import { MarketToolbar } from "@/components/market-toolbar";
 import { SearchBox } from "@/components/search-box";
 import { Reveal } from "@/components/reveal";
 import { CountUp } from "@/components/count-up";
@@ -14,12 +15,14 @@ import { LivePulse, LivePulseSkeleton } from "@/components/live-pulse";
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: Category; q?: string }>;
+  searchParams: Promise<{ category?: Category; q?: string; sort?: string; x402?: string; reviews?: string }>;
 }) {
-  const { category, q } = await searchParams;
+  const { category, q, sort, x402: x402Param, reviews: reviewsParam } = await searchParams;
   const valid = category && category in CATEGORIES ? category : undefined;
+  const sortKey = (sort === "feedback" || sort === "newest" ? sort : "score") as SortKey;
+  const filters = { x402: x402Param === "1", reviews: reviewsParam === "1" };
 
-  const { agents, indexed, isMatchCount, featured, error } = await browse({ category: valid, search: q });
+  const { agents, indexed, isMatchCount, featured, error } = await browse({ category: valid, search: q, sort: sortKey, filters });
   // Nav counts come from the full catalogue so they do not change as you filter,
   // except during a search where the counts describe the results.
   const counts = q ? countByCategory(agents) : await categoryTotals();
@@ -34,21 +37,7 @@ export default async function Home({
 
   return (
     <div className="mx-auto max-w-7xl px-5 pb-24">
-      <header className="sticky top-3 z-50 mt-3 flex items-center justify-between rounded-2xl glass-strong px-5 py-3">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">◆</span>
-          <span className="text-lg font-semibold tracking-tight text-cosmic">Proven</span>
-          <span className="ml-2 hidden rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-muted sm:inline">
-            BNB Smart Chain
-          </span>
-        </div>
-        <nav className="flex items-center gap-4">
-          <a href="#browse" className="text-sm text-muted transition hover:text-fg">Browse</a>
-          <Link href="/build" className="rounded-xl bg-linear-to-r from-violet to-magenta px-4 py-1.5 text-sm font-medium text-white glow-violet transition hover:brightness-110">
-            Build a flow
-          </Link>
-        </nav>
-      </header>
+      <SiteHeader variant="home" />
 
       <section className="py-14 sm:py-20">
         <Reveal>
@@ -120,7 +109,12 @@ export default async function Home({
           active={valid}
           total={q ? agents.length : Object.values(counts).reduce((a, b) => a + b, 0)}
           query={q}
+          preserve={{ sort, x402: x402Param, reviews: reviewsParam }}
         />
+
+        <Suspense fallback={<div className="h-9" />}>
+          <MarketToolbar />
+        </Suspense>
 
         {valid && (
           <p className="rounded-xl glass px-4 py-2.5 text-[13px] text-muted">
@@ -168,9 +162,9 @@ function Stat({
   label: string; num: number; accent?: boolean; suffix?: string; decimals?: number;
 }) {
   return (
-    <div className="rounded-2xl glass px-5 py-4 glow-hover hover:border-violet/30">
-      <div className="text-[11px] uppercase tracking-wide text-muted">{label}</div>
-      <div className={`mt-1 font-mono text-3xl ${accent ? "text-cosmic" : "text-fg"}`}>
+    <div className="card card-hover px-5 py-4">
+      <div className="eyebrow">{label}</div>
+      <div className={`stat-value mt-2 text-3xl font-semibold ${accent ? "text-cosmic" : "text-fg"}`}>
         <CountUp value={num} suffix={suffix} decimals={decimals} />
       </div>
     </div>

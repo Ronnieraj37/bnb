@@ -130,7 +130,7 @@ export async function TrackRecord({ wallet }: { wallet: string }) {
 
 function Section({ children }: { children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl glass p-5">
+    <section className="card p-5">
       <div className="flex items-center gap-2">
         <TrendingUp size={15} className="text-violet" />
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Track record</h2>
@@ -147,9 +147,9 @@ function Stat({
 }) {
   const toneClass = tone === "pos" ? "text-pos" : tone === "neg" ? "text-neg" : tone === "muted" ? "text-muted" : accent ? "text-cosmic" : "text-fg";
   return (
-    <div className="rounded-xl bg-white/[0.03] px-3 py-2">
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted">{icon}{label}</div>
-      <div className={`mt-0.5 font-mono text-sm ${toneClass}`}>{value}</div>
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3.5 py-3">
+      <div className="eyebrow flex items-center gap-1">{icon}{label}</div>
+      <div className={`stat-value mt-2 text-xl font-semibold ${toneClass}`}>{value}</div>
     </div>
   );
 }

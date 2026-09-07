@@ -1,23 +1,10 @@
-"use client";
-
 import Link from "next/link";
-import { motion } from "motion/react";
-import { Wrench, ShieldCheck, AlertTriangle, MessageSquare, Play } from "lucide-react";
+import { AlertTriangle, MessageSquare, Play, ArrowUpRight, Star } from "lucide-react";
 import type { Agent } from "@/lib/agents/types";
 import { CATEGORIES } from "@/lib/agents/types";
 import { ScoreRing } from "./score-ring";
 import { CompareCheckbox } from "./compare-checkbox";
 import { looksReadOnly } from "@/lib/mcp/client";
-
-function Stat({ icon, label, tone }: { icon: React.ReactNode; label: string; tone?: "pos" | "neg" | "muted" }) {
-  const c = tone === "pos" ? "text-pos" : tone === "neg" ? "text-neg" : "text-muted";
-  return (
-    <span className={`inline-flex items-center gap-1 text-[11px] ${c}`}>
-      {icon}
-      {label}
-    </span>
-  );
-}
 
 export function AgentCard({
   agent,
@@ -32,89 +19,75 @@ export function AgentCard({
   const tools = agent.capabilities.flatMap((c) => c.tools);
   const runnable = tools.filter(looksReadOnly).length;
   const live = agent.health?.verified;
+  const down = !live && Boolean(agent.health?.error);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-40px" }}
-      transition={{ duration: 0.45, delay: Math.min(index * 0.04, 0.3), ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -4 }}
-      className="group relative h-full"
-    >
-      {featured && (
-        <div className="pointer-events-none absolute -top-2.5 left-4 z-10 rounded-full bg-linear-to-r from-violet to-magenta px-2.5 py-0.5 text-[10px] font-semibold text-white shadow-lg">
-          Top ranked
-        </div>
-      )}
+    <div className="reveal group relative h-full" style={{ animationDelay: `${Math.min(index * 0.03, 0.24)}s` }}>
       <Link
         href={`/agents/${encodeURIComponent(agent.id)}`}
-        className={`glass glow-hover flex h-full flex-col gap-3 rounded-2xl p-4 hover:border-violet/40 ${featured ? "border-violet/25" : ""}`}
+        className="card card-hover flex h-full flex-col overflow-hidden"
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-base">{cat.emoji}</span>
-              <h3 className="truncate font-semibold">{agent.name}</h3>
+        {/* accent top edge, per category */}
+        <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${cat.accent}, transparent 70%)` }} />
+
+        <div className="flex flex-col gap-3 p-4">
+          {/* header row */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <span
+                className="pill mb-2"
+                style={{ background: `${cat.accent}1f`, color: cat.accent }}
+              >
+                <span>{cat.emoji}</span> {cat.label}
+              </span>
+              <h3 className="truncate text-[15px] font-semibold leading-tight text-fg">{agent.name}</h3>
+              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
+                <span className="font-mono">#{agent.tokenId}</span>
+                {agent.x402 && <span className="rounded bg-violet/15 px-1.5 py-0.5 text-[10px] font-medium text-violet">x402</span>}
+                {featured && <span className="rounded bg-violet/15 px-1.5 py-0.5 text-[10px] font-medium text-violet">Top ranked</span>}
+              </div>
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
-              <span>{cat.label}</span>
-              <span>·</span>
-              <span className="font-mono">#{agent.tokenId}</span>
-              {agent.x402 && (
-                <span className="rounded bg-violet/15 px-1.5 py-0.5 text-[10px] text-violet">x402</span>
-              )}
-            </div>
+            <ScoreRing score={agent.score} rank={agent.rank} />
           </div>
-          <ScoreRing score={agent.score} rank={agent.rank} />
+
+          {/* what it does — always present, data-independent */}
+          <p className="line-clamp-2 min-h-[2.4rem] text-[13px] leading-relaxed text-muted">
+            {agent.description || cat.blurb}
+          </p>
         </div>
 
-        <p className="line-clamp-2 min-h-[2.5rem] text-sm text-muted">
-          {agent.description || "No description published to the registry."}
-        </p>
+        {/* stat footer */}
+        <div className="mt-auto flex items-center gap-3 border-t border-white/[0.06] bg-white/[0.015] px-4 py-2.5 text-[11px]">
+          {live ? (
+            <span className="inline-flex items-center gap-1 text-pos"><span className="h-1.5 w-1.5 rounded-full bg-pos" /> Live</span>
+          ) : down ? (
+            <span className="inline-flex items-center gap-1 text-neg"><AlertTriangle size={11} /> Offline</span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-muted"><span className="h-1.5 w-1.5 rounded-full bg-muted/50" /> Unverified</span>
+          )}
 
-        {tools.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {tools.slice(0, 3).map((t) => (
-              <span key={t} className="rounded border border-violet/25 bg-violet/5 px-1.5 py-0.5 font-mono text-[10px] text-violet">
-                {t}
-              </span>
-            ))}
-            {tools.length > 3 && (
-              <span className="px-1 text-[10px] text-muted">+{tools.length - 3} more</span>
-            )}
-          </div>
-        )}
-
-        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/8 pt-3">
           {tools.length > 0 ? (
             runnable > 0 ? (
-              <Stat icon={<Play size={11} />} label={`${runnable} runnable`} tone="pos" />
+              <span className="inline-flex items-center gap-1 text-violet"><Play size={11} /> {runnable} runnable</span>
             ) : (
-              <Stat icon={<Wrench size={11} />} label={`${tools.length} tools`} />
+              <span className="text-muted">{tools.length} tools</span>
             )
-          ) : agent.detailed ? (
-            // Only claim "no interface" when we actually checked — a list
-            // record with empty capabilities just means we haven't looked yet.
-            <Stat icon={<Wrench size={11} />} label="no interface" tone="muted" />
-          ) : (
-            <Stat icon={<Wrench size={11} />} label="see tools →" />
-          )}
-          {live ? (
-            <Stat icon={<ShieldCheck size={11} />} label="endpoint live" tone="pos" />
-          ) : agent.health?.error ? (
-            <Stat icon={<AlertTriangle size={11} />} label="endpoint down" tone="neg" />
           ) : null}
-          <Stat
-            icon={<MessageSquare size={11} />}
-            label={agent.feedbackCount ? `${agent.feedbackCount} reviews` : "no reviews"}
-            tone={agent.feedbackCount ? undefined : "muted"}
-          />
-          <div className="ml-auto">
-            <CompareCheckbox entry={{ id: agent.id, name: agent.name, category: agent.category }} />
-          </div>
+
+          <span className="inline-flex items-center gap-1 text-muted">
+            {agent.feedbackCount ? <><Star size={11} className="text-violet" /> {agent.averageScore.toFixed(1)}</> : <><MessageSquare size={11} /> new</>}
+          </span>
+
+          <span className="ml-auto inline-flex items-center gap-1 font-medium text-muted transition group-hover:text-violet">
+            View <ArrowUpRight size={12} />
+          </span>
         </div>
       </Link>
-    </motion.div>
+
+      {/* compare toggle floats top-right, out of the link */}
+      <div className="absolute right-3 top-[3.35rem] z-10">
+        <CompareCheckbox entry={{ id: agent.id, name: agent.name, category: agent.category }} />
+      </div>
+    </div>
   );
 }

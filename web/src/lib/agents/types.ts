@@ -8,31 +8,35 @@ export type Category = "rebalancing" | "grid" | "yield" | "health-factor";
 
 export const CATEGORIES: Record<
   Category,
-  { label: string; blurb: string; emoji: string; /** what matters when judging one */ judgeOn: string }
+  { label: string; blurb: string; emoji: string; /** what matters when judging one */ judgeOn: string; /** accent hex for UI identity */ accent: string }
 > = {
   rebalancing: {
     label: "Rebalancing",
     blurb: "Manages LP ranges and resets positions automatically.",
     emoji: "♻️",
     judgeOn: "Can it read a position and reset a range without you signing each time?",
+    accent: "#4aa8ff",
   },
   grid: {
     label: "Grid Trading",
     blurb: "Places and manages automated grid orders.",
     emoji: "▦",
     judgeOn: "Can it place and cancel orders, and does it guard against one-way moves?",
+    accent: "#f0b90b",
   },
   yield: {
     label: "Yield Optimisation",
     blurb: "Routes liquidity to the highest available APR.",
     emoji: "🌱",
     judgeOn: "Does it compare venues, and does it account for gas before moving?",
+    accent: "#2ee6a6",
   },
   "health-factor": {
     label: "Health Factor",
     blurb: "Protects lending positions from liquidation.",
     emoji: "🛡️",
     judgeOn: "Can it read your health factor and actually repay before liquidation?",
+    accent: "#ff8fa3",
   },
 };
 

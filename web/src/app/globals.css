@@ -32,11 +32,25 @@ body {
   background: var(--color-bg);
   color: var(--color-fg);
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
+
+/* Tighter, more deliberate headings — part of the "refine, don't replace" pass. */
+h1, h2, h3 { letter-spacing: -0.01em; }
 
 * {
   scrollbar-width: thin;
   scrollbar-color: #2a2013 transparent;
+}
+
+::selection { background: rgba(240, 185, 11, 0.25); color: #fff; }
+
+/* One consistent focus ring everywhere — accessibility + polish. */
+:focus-visible {
+  outline: 2px solid rgba(240, 185, 11, 0.6);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* ── animations ─────────────────────────────────────────────────────────── */
@@ -48,6 +62,22 @@ body {
 }
 @keyframes gradient-pan { to { background-position: 200% center; } }
 @keyframes pulse-soft { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes shimmer { 100% { background-position: -200% 0; } }
+
+/* CSS-only entrance reveal. Runs without JS/hydration, so content is never
+   stuck invisible if motion fails to run (the framer-motion whileInView bug).
+   Under prefers-reduced-motion the animation is disabled and the element shows
+   its final, visible state. */
+@keyframes reveal-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.reveal { animation: reveal-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Skeleton loading shimmer — a moving highlight sweep over a placeholder block. */
+.shimmer {
+  background-image: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%);
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
 
 /* ── utilities ──────────────────────────────────────────────────────────── */
 .text-cosmic {
@@ -65,23 +95,55 @@ body {
   animation: gradient-pan 6s linear infinite;
 }
 
+/* Calmer glass: a touch more surface, thinner blur, a cleaner hairline border.
+   Lighter blur also scrolls smoother over the (now static) background. */
 .glass {
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px) saturate(130%);
+  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.glass-strong {
+  background: rgba(13, 11, 8, 0.72);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.glass-strong {
-  background: rgba(14, 12, 8, 0.62);
-  backdrop-filter: blur(20px) saturate(150%);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* Softer, less shouty gold glow. */
+.glow-violet { box-shadow: 0 6px 26px -14px rgba(240, 185, 11, 0.42); }
+.glow-hover { transition: box-shadow 0.3s ease, border-color 0.3s ease, transform 0.3s ease; }
+.glow-hover:hover { box-shadow: 0 12px 40px -18px rgba(240, 185, 11, 0.38); }
+
+/* ── Redesign: a clean, elevated card system ─────────────────────────────────
+   Solid dark surfaces with a hairline border and a faint top highlight read as
+   a premium dashboard — cleaner than translucent glass muddied by the busy
+   background. Used across the marketplace and agent pages. */
+.card {
+  position: relative;
+  background: linear-gradient(180deg, rgba(255,255,255,0.028), rgba(255,255,255,0) 120px), #100d09;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 18px;
+}
+.card-hover { transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
+.card-hover:hover {
+  transform: translateY(-3px);
+  border-color: rgba(240, 185, 11, 0.4);
+  box-shadow: 0 18px 50px -24px rgba(0,0,0,0.8), 0 0 0 1px rgba(240,185,11,0.12);
 }
 
-.glow-violet { box-shadow: 0 12px 48px -14px rgba(240, 185, 11, 0.55); }
-.glow-hover { transition: box-shadow 0.35s ease, border-color 0.35s ease, transform 0.35s ease; }
-.glow-hover:hover { box-shadow: 0 18px 60px -16px rgba(240, 185, 11, 0.5); }
+/* Eyebrow label — small, spaced, muted. Used above section titles. */
+.eyebrow { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-muted); font-weight: 600; }
+
+/* Big data numbers, like a trading dashboard. */
+.stat-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; line-height: 1; }
+
+/* Category accent chip. */
+.pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 500; }
+
+/* Subtle animated gold hairline used to separate hero sections. */
+.rule-gold { height: 1px; background: linear-gradient(90deg, transparent, rgba(240,185,11,0.35), transparent); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

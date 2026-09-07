@@ -1,30 +1,21 @@
-"use client";
-
-import { motion } from "motion/react";
 import type { ReactNode } from "react";
 
-// Scroll/enter reveal wrapper. Wraps server-rendered children — no client cost
-// beyond the motion boundary.
+// Entrance reveal via pure CSS (see .reveal in globals.css). No framer-motion,
+// no hydration dependency — content is visible even if JS never runs, which
+// fixes the whileInView bug where a hidden/slow container left sections stuck
+// at opacity:0. `delay` staggers the fade; reduced-motion disables it.
 export function Reveal({
   children,
   delay = 0,
-  y = 18,
   className,
 }: {
   children: ReactNode;
   delay?: number;
-  y?: number;
   className?: string;
 }) {
   return (
-    <motion.div
-      className={className}
-      initial={{ opacity: 0, y }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
-    >
+    <div className={`reveal ${className ?? ""}`} style={delay ? { animationDelay: `${delay}s` } : undefined}>
       {children}
-    </motion.div>
+    </div>
   );
 }

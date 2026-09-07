@@ -7,16 +7,20 @@ export function CategoryNav({
   active,
   total,
   query,
+  preserve,
 }: {
   counts: Record<Category, number>;
   active?: Category;
   total: number;
   query?: string;
+  /** Extra URL params (sort, filters) to keep when switching category. */
+  preserve?: Record<string, string | undefined>;
 }) {
   const href = (key?: Category) => {
     const p = new URLSearchParams();
     if (key) p.set("category", key);
     if (query) p.set("q", query);
+    for (const [k, v] of Object.entries(preserve ?? {})) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/?${s}` : "/";
   };

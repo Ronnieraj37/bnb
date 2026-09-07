@@ -35,7 +35,7 @@ export function AgentInterface({
         onTools={setLiveTools}
       />
 
-      <section className="rounded-2xl glass p-5">
+      <section className="card p-5">
         <div className="flex items-center gap-2">
           <Wrench size={15} className="text-violet" />
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">

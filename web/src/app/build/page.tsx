@@ -342,7 +342,26 @@ export default function BuildPage() {
   }));
 
   return (
-    <div className="mx-auto flex h-screen max-w-[1600px] flex-col px-4 py-3">
+    <>
+      {/* Mobile gate — the drag-drop flow canvas needs a pointer and width, so on
+          small screens we send people to the (fully mobile) marketplace instead
+          of showing a broken editor. */}
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center md:hidden">
+        <Link href="/" className="flex items-center gap-2 text-lg font-semibold text-cosmic">
+          <span className="text-violet">◆</span> Proven
+        </Link>
+        <Sparkles size={26} className="text-violet" />
+        <h1 className="text-xl font-semibold">The flow builder is a desktop experience</h1>
+        <p className="max-w-xs text-sm text-muted">
+          Building an agent flow needs a wide canvas and a mouse. Open Proven on a desktop browser to
+          use it — meanwhile the marketplace works great here on mobile.
+        </p>
+        <Link href="/" className="mt-1 inline-flex items-center gap-1.5 rounded-xl bg-linear-to-r from-violet to-magenta px-4 py-2 text-sm font-medium text-white glow-violet transition hover:brightness-110">
+          <ArrowLeft size={14} /> Back to marketplace
+        </Link>
+      </div>
+
+    <div className="mx-auto hidden h-screen max-w-[1600px] flex-col px-4 py-3 md:flex">
       <header className="flex flex-wrap items-center gap-3 rounded-2xl glass-strong px-4 py-2.5">
         <Link href="/" className="flex items-center gap-1.5 text-sm text-muted transition hover:text-fg">
           <ArrowLeft size={16} /> Marketplace
@@ -526,6 +545,7 @@ export default function BuildPage() {
         </aside>
       </div>
     </div>
+    </>
   );
 }
 

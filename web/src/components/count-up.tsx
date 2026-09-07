@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 // Count-up that runs once when the element scrolls into view. Uses a single
 // rAF loop and stops on completion — no timers left running.
@@ -17,50 +17,32 @@ export function CountUp({
   decimals?: number;
   duration?: number;
 }) {
-  const ref = useRef<HTMLSpanElement>(null);
   const [n, setN] = useState(0);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    // Guard is per-effect, not a ref: React's dev double-mount would otherwise
-    // mark it done on the first pass and leave the counter frozen at zero.
-    let started = false;
     let raf = 0;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      // Jump straight to the value, but off the effect body so we don't
-      // trigger a cascading synchronous render.
-      raf = requestAnimationFrame(() => setN(value));
-      return () => cancelAnimationFrame(raf);
-    }
+    // Guaranteed completion: fires even when the tab is backgrounded (rAF is
+    // paused while hidden), so the real number is ALWAYS shown — never stuck at
+    // zero. The rAF animation below is a progressive enhancement on top.
+    const settle = setTimeout(() => setN(value), reduce ? 0 : duration + 120);
 
-    const run = () => {
-      if (started) return;
-      started = true;
-      const t0 = performance.now();
+    if (!reduce) {
+      const start = performance.now();
       const tick = (t: number) => {
-        const p = Math.min(1, (t - t0) / duration);
+        const p = Math.min(1, (t - start) / duration);
         setN(value * (1 - Math.pow(1 - p, 3))); // easeOutCubic
         if (p < 1) raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);
-    };
+    }
 
-    const io = new IntersectionObserver(([e]) => e.isIntersecting && run(), { threshold: 0.2 });
-    io.observe(el);
-    // Already on screen at mount? Start immediately.
-    if (el.getBoundingClientRect().top < window.innerHeight) run();
-
-    return () => {
-      io.disconnect();
-      cancelAnimationFrame(raf);
-    };
+    return () => { clearTimeout(settle); cancelAnimationFrame(raf); };
   }, [value, duration]);
 
   return (
-    <span ref={ref}>
+    <span>
       {prefix}
       {n.toFixed(decimals)}
       {suffix}

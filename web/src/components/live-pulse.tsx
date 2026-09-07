@@ -30,7 +30,7 @@ export async function LivePulse() {
 
   return (
     <section className="mb-10 grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
-      <div className="rounded-2xl glass p-5">
+      <div className="card p-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Best BSC yields right now</h2>
           <Link href="/build" className="flex shrink-0 items-center gap-1 text-[12px] text-violet transition hover:underline">
@@ -58,7 +58,7 @@ export async function LivePulse() {
         <p className="mt-2 text-[11px] text-muted">Live from DeFiLlama — the same feed the flow builder reads.</p>
       </div>
 
-      <div className="rounded-2xl glass p-5">
+      <div className="card p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Live prices</h2>
         <div className="mt-3 flex flex-col gap-2">
           {([["BNB", bnb], ["CAKE", cake]] as const).map(([label, d]) =>
