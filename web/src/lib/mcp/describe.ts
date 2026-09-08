@@ -8,7 +8,17 @@
 // `movesFunds` is the honest read/write split — anything that can move money
 // gets flagged so the UI can separate "safe to try" from "needs your approval".
 
-import { looksReadOnly } from "./client";
+/**
+ * Whether a tool NAME reads rather than writes. Judged by verb prefix, which is
+ * the reliable signal: "estimateAmountsForIncreasePosition" is a read despite
+ * containing "increase", and "createPool" is a write despite containing "pool".
+ * Anything without a read prefix is treated as fund-moving — the safe default.
+ */
+const READ_PREFIX = /^(get|list|fetch|read|estimate|query|check|view|describe)/i;
+
+export function looksReadOnly(name: string): boolean {
+  return READ_PREFIX.test(name);
+}
 
 export type PlainTool = {
   name: string;

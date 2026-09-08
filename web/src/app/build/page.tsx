@@ -67,6 +67,49 @@ async function waitForReceipt(txHash: string, timeoutMs = 60_000): Promise<void>
   throw new Error("timed out waiting for the transaction to be mined");
 }
 
+// One-click starter flows. Each is real — the blocks run live Venus /
+// PancakeSwap / DeFiLlama / Binance checks when you hit "Run for real".
+const TEMPLATES: { name: string; emoji: string; blurb: string; nodes: { type: string; config: Record<string, ConfigValue> }[] }[] = [
+  {
+    name: "Best yield finder",
+    emoji: "🌱",
+    blurb: "Scan every BSC venue and surface the top real APR.",
+    nodes: [
+      { type: "trigger.schedule", config: { cron: "0 0 * * *" } },
+      { type: "skill.bscYields", config: { protocol: "all" } },
+      { type: "io.telegram", config: { message: "Best BSC yield right now 👇" } },
+    ],
+  },
+  {
+    name: "Venus liquidation guard",
+    emoji: "🛡️",
+    blurb: "Watch a loan's health and alert before it's liquidated.",
+    nodes: [
+      { type: "skill.venusHealth", config: {} },
+      { type: "logic.condition", config: { expr: "shortfallUsd > 0" } },
+      { type: "io.telegram", config: { message: "⚠️ Venus position at risk — repay now." } },
+    ],
+  },
+  {
+    name: "Price + pool watch",
+    emoji: "📈",
+    blurb: "Track BNB price and a live PancakeSwap v3 pool.",
+    nodes: [
+      { type: "skill.priceVolatility", config: { asset: "BNB" } },
+      { type: "skill.pancakePool", config: { tokenIn: "WBNB", tokenOut: "CAKE" } },
+    ],
+  },
+  {
+    name: "Gas-checked swap",
+    emoji: "🔁",
+    blurb: "Estimate real gas, then do a real testnet swap.",
+    nodes: [
+      { type: "skill.gasEstimate", config: {} },
+      { type: "skill.swap", config: { tokenIn: "WBNB", tokenOut: "CAKE", amount: "0.01" } },
+    ],
+  },
+];
+
 let seq = 0;
 const nextId = (type: string) => `${type}-${++seq}`;
 
@@ -436,7 +479,7 @@ export default function BuildPage() {
       )}
 
       <div className="mt-3 flex flex-1 gap-3 overflow-hidden">
-        <aside className="w-56 shrink-0 overflow-y-auto rounded-2xl glass p-3">
+        <aside className="w-56 shrink-0 overflow-y-auto card p-3">
           <p className="mb-2 text-[11px] uppercase tracking-wide text-muted">Add a block</p>
           <div className="flex flex-col gap-3">
             {grouped.map((g) => (
@@ -460,12 +503,27 @@ export default function BuildPage() {
           </div>
         </aside>
 
-        <div className="relative flex-1 overflow-hidden rounded-2xl glass">
+        <div className="relative flex-1 overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0c0a07]">
           {nodes.length === 0 && (
-            <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center text-center text-muted">
-              <Sparkles size={26} className="mb-2 text-violet" />
-              <p className="text-sm">Describe a flow above, or add a block from the left.</p>
-              <p className="mt-1 text-[12px]">Every block runs a real check — Venus, PancakeSwap, DeFiLlama, Binance.</p>
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center overflow-y-auto p-6 text-center">
+              <Sparkles size={26} className="mb-3 text-violet" />
+              <p className="text-base font-medium text-fg">Start from a template, or describe a flow above</p>
+              <p className="mt-1 text-[12px] text-muted">Every block runs a real check — Venus, PancakeSwap, DeFiLlama, Binance. Nothing is simulated.</p>
+              <div className="mt-5 grid w-full max-w-xl grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {TEMPLATES.map((t) => (
+                  <button
+                    key={t.name}
+                    onClick={() => load(t.nodes, t.name)}
+                    className="card card-hover flex items-start gap-3 p-3 text-left"
+                  >
+                    <span className="text-xl">{t.emoji}</span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-fg">{t.name}</span>
+                      <span className="mt-0.5 block text-[12px] text-muted">{t.blurb}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           <ReactFlow
@@ -479,7 +537,7 @@ export default function BuildPage() {
           </ReactFlow>
         </div>
 
-        <aside className="w-80 shrink-0 overflow-y-auto rounded-2xl glass p-4">
+        <aside className="w-80 shrink-0 overflow-y-auto card p-4">
           {results ? (
             <ResultsPanel steps={results} onClose={() => setResults(null)} />
           ) : selDef ? (

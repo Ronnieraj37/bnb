@@ -145,6 +145,16 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 /* Subtle animated gold hairline used to separate hero sections. */
 .rule-gold { height: 1px; background: linear-gradient(90deg, transparent, rgba(240,185,11,0.35), transparent); }
 
+/* Dark-theme the React Flow canvas controls (default is a light box). */
+.react-flow__controls { box-shadow: 0 8px 24px -12px rgba(0,0,0,0.7) !important; border-radius: 10px; overflow: hidden; }
+.react-flow__controls-button {
+  background: #14110b !important;
+  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+  color: #f3efe6 !important;
+}
+.react-flow__controls-button:hover { background: #1c180f !important; }
+.react-flow__controls-button svg { fill: #9c968a; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

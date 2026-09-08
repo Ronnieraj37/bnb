@@ -17,11 +17,17 @@ export const SYMBOL: Record<string, string> = {
   ETH: "ETHUSDT",
 };
 
-/** Real OHLC candles from Binance. `days` of 4h bars (6 per day). */
-export async function getCandles(asset: string, days = 60): Promise<Candle[]> {
+const BARS_PER_DAY: Record<string, number> = { "1h": 24, "4h": 6, "1d": 1 };
+
+/**
+ * Real OHLC candles from Binance. `days` of bars at `interval` (default 4h).
+ * Use "1h" when a strategy needs intra-day resolution — e.g. paper-trading a
+ * 1-day window, where 4h bars give only six data points.
+ */
+export async function getCandles(asset: string, days = 60, interval: "1h" | "4h" | "1d" = "4h"): Promise<Candle[]> {
   const symbol = SYMBOL[asset] ?? SYMBOL.BNB;
-  const limit = Math.min(1000, days * 6);
-  const url = `${BINANCE}?symbol=${symbol}&interval=4h&limit=${limit}`;
+  const limit = Math.min(1000, Math.ceil(days * (BARS_PER_DAY[interval] ?? 6)));
+  const url = `${BINANCE}?symbol=${symbol}&interval=${interval}&limit=${limit}`;
 
   const res = await fetch(url, { next: { revalidate: 900 } });
   if (!res.ok) throw new Error(`binance ${res.status}`);

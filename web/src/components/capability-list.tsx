@@ -1,12 +1,9 @@
-"use client";
-
 import { Eye, Coins } from "lucide-react";
 import { describeTools, strategySummary, type PlainTool } from "@/lib/mcp/describe";
 
 // What the agent actually does, in plain English — the fix for the raw
 // "createWallet / swapExactTokensForTokens" jargon dump. Two clear groups:
-// reads (safe, no funds) and actions that move your money. The live "run a
-// read-only call" surface is kept separately (ToolExplorer), below this.
+// reads (safe, no funds) and actions that move your money.
 
 export function CapabilityList({
   category,
@@ -35,7 +32,7 @@ export function CapabilityList({
         <Group
           icon={<Eye size={14} className="text-pos" />}
           title="Reads — safe, no funds touched"
-          note="Information only. You can try these live below without connecting a wallet."
+          note="Information only — these never move funds."
           tools={reads}
           tone="pos"
         />

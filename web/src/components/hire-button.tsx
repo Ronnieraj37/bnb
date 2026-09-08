@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Wallet, Check, KeyRound, AlertTriangle, ShieldCheck, ChevronDown, Loader2, XCircle } from "lucide-react";
+import { Wallet, Check, KeyRound, AlertTriangle, ShieldCheck, ChevronDown, Loader2, XCircle, X } from "lucide-react";
 import { describeTool } from "@/lib/mcp/describe";
 import { sessionStore, isActive, CHANGED, type HiredSession } from "@/lib/session/store";
 
@@ -53,6 +54,8 @@ export function HireButton({
   const [showJson, setShowJson] = useState(false);
   const [now, setNow] = useState<number | null>(null);
   const [hired, setHired] = useState<HiredSession | null>(null);
+  // Portal target only exists on the client; gate rendering on mount.
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const sync = () => {
@@ -62,6 +65,7 @@ export function HireButton({
     // setTimeout (not rAF) so this still runs when the tab is backgrounded —
     // rAF is paused while hidden, which would leave a hired session unshown.
     const t = setTimeout(() => {
+      setMounted(true);
       setHasWallet(Boolean(window.ethereum));
       setNow(nowMs());
       sync();
@@ -69,6 +73,16 @@ export function HireButton({
     window.addEventListener(CHANGED, sync);
     return () => { clearTimeout(t); window.removeEventListener(CHANGED, sync); };
   }, [agentId]);
+
+  // Modal behaviour: close on Escape, lock background scroll while open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [open]);
 
   const connect = async () => {
     if (!window.ethereum) return;
@@ -189,14 +203,28 @@ export function HireButton({
   return (
     <div className="flex w-full flex-col items-stretch gap-3 sm:w-80">
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(true)}
         className="rounded-xl bg-linear-to-r from-violet to-magenta px-5 py-2.5 font-medium text-white glow-violet transition hover:brightness-110"
       >
-        {open ? "Close" : "Hire this agent"}
+        Hire this agent
       </button>
 
-      {open && (
-        <div className="card p-4 text-sm">
+      {/* Rendered through a portal into <body>: the agent hero is a card with
+          overflow-hidden inside an animated (transformed) wrapper, and a
+          transformed ancestor becomes the containing block for position:fixed —
+          which trapped this popup inside that card. Portalling escapes it. */}
+      {open && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-end justify-center p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+          {/* backdrop */}
+          <button aria-label="Close" onClick={() => setOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          {/* popup */}
+          <div className="card relative z-10 max-h-[92vh] w-full max-w-md overflow-y-auto rounded-b-none p-5 text-sm shadow-2xl reveal sm:rounded-b-[18px]">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-semibold">Hire {agentName}</h3>
+              <button onClick={() => setOpen(false)} aria-label="Close" className="rounded-lg p-1 text-muted transition hover:bg-white/5 hover:text-fg">
+                <X size={16} />
+              </button>
+            </div>
           {/* Step 1 — connect */}
           <div className="flex gap-3 pb-3">
             <Step n={1} done={Boolean(account)} />
@@ -314,7 +342,9 @@ export function HireButton({
           </p>
 
           {error && <p className="mt-2 text-[12px] text-neg">{error}</p>}
-        </div>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

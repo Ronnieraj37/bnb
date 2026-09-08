@@ -54,9 +54,9 @@ export default async function Home({
         <Reveal delay={0.16}>
           <p className="mt-5 max-w-2xl text-lg text-muted">
             The registry lists hundreds of thousands of agents and tells you almost nothing about
-            them. Proven shows what each one can actually do — its real published tools, whether
-            its endpoint is actually alive right now, and lets you call it live before you trust it
-            with anything.
+            them. Proven shows what each one actually does — how it trades, its real on-chain track
+            record, and the live rates it works with — then lets you hire it with a spend cap you set
+            and can revoke.
           </p>
         </Reveal>
 

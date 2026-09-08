@@ -6,14 +6,14 @@ import {
 } from "lucide-react";
 import { getAgent } from "@/lib/agents";
 import { CATEGORIES } from "@/lib/agents/types";
-import { marketContext } from "@/lib/market/context";
 import { timeAgo, shortAddr } from "@/lib/format";
-import { looksReadOnly } from "@/lib/mcp/client";
+import { looksReadOnly } from "@/lib/mcp/describe";
 import { ScoreRing } from "@/components/score-ring";
 import { Reveal } from "@/components/reveal";
 import { SiteHeader } from "@/components/site-header";
 import { AgentInterface } from "@/components/agent-interface";
 import { StrategyDemoSection } from "@/components/strategy-demo-section";
+import { PaperPerformance } from "@/components/paper-performance";
 import { TrackRecord } from "@/components/track-record";
 import { HireButton } from "@/components/hire-button";
 import { CompareCheckbox } from "@/components/compare-checkbox";
@@ -59,13 +59,8 @@ export default async function AgentPage({
 
       {/* Identity hero */}
       <Reveal>
-        <section className="card relative mt-6 overflow-hidden p-6 sm:p-7">
-          {/* accent glow, tinted per category */}
-          <span
-            className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full opacity-40 blur-3xl"
-            style={{ background: `radial-gradient(circle, ${cat.accent}, transparent 65%)` }}
-          />
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+        <section className="card mt-6 p-6 sm:p-7">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-start gap-5">
               <ScoreRing score={agent.score} rank={agent.rank} size={88} />
               <div className="min-w-0">
@@ -147,27 +142,21 @@ export default async function AgentPage({
             </Reveal>
           )}
 
-          {/* What it does (plain English) + is-it-online + live tool runner */}
+          {/* What it does, in plain English */}
           <Reveal delay={0.08}>
-            <div className="flex flex-col gap-5">
-              <AgentInterface
-                agentId={agent.id}
-                category={agent.category}
-                registryToolNames={tools}
-                registrySaysVerified={Boolean(agent.health?.verified)}
-                registryError={agent.health?.error}
-              />
-              <p className="-mt-2 rounded-xl bg-white/[0.03] px-3 py-2 text-[12px] text-muted">
-                <span className="text-fg">For {cat.label.toLowerCase()}:</span> {cat.judgeOn}
-              </p>
-            </div>
+            <AgentInterface category={agent.category} registryToolNames={tools} />
           </Reveal>
 
-          {/* Category-relevant live market — streamed so it never blocks the
-              page shell from painting. */}
+          {/* Paper-traded performance — real strategy logic over real price
+              history. Replaces the old category-level APR panel, which showed
+              every agent in a category the same number. */}
           <Reveal delay={0.1}>
-            <Suspense fallback={<CardSkeleton title="Live market" lines={4} />}>
-              <MarketSection category={agent.category} />
+            <Suspense fallback={<CardSkeleton title="Paper-traded performance" lines={4} />}>
+              <PaperPerformance
+                category={agent.category}
+                protocols={agent.protocols}
+                wallet={agent.agentWallet}
+              />
             </Suspense>
           </Reveal>
         </div>
@@ -241,32 +230,6 @@ export default async function AgentPage({
         </div>
       </div>
     </div>
-  );
-}
-
-async function MarketSection({ category }: { category: Parameters<typeof marketContext>[0] }) {
-  const context = await marketContext(category);
-  if (!context) return null;
-  return (
-    <section className="card p-5">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{context.heading}</h2>
-      <p className="mb-3 mt-1 text-[13px] text-muted">{context.note}</p>
-      <div className="divide-y divide-white/5">
-        {context.pools.map((p) => (
-          <div key={`${p.project}-${p.symbol}`} className="flex items-center justify-between py-2 text-sm">
-            <div className="min-w-0">
-              <div className="truncate text-fg">{p.symbol}</div>
-              <div className="text-[11px] text-muted">{p.project}</div>
-            </div>
-            <div className="shrink-0 text-right">
-              <div className="font-mono text-pos">{p.apy.toFixed(2)}%</div>
-              <div className="text-[11px] text-muted">${(p.tvlUsd / 1e6).toFixed(1)}M TVL</div>
-            </div>
-          </div>
-        ))}
-      </div>
-      <p className="mt-2 text-[11px] text-muted">Live from DeFiLlama.</p>
-    </section>
   );
 }
 
