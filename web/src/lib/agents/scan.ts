@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+import snapshotData from "./snapshot.json";
 import type {
   Agent, AgentPage, Capability, Category, Health, ScoreBreakdown,
 } from "./types";
@@ -28,7 +30,10 @@ export class ScanError extends Error {
   }
 }
 
-const TIMEOUT_MS = 9000;
+// Kept short deliberately: this bounds how long a page render can wait on the
+// registry. 9s was long enough for a handful of slow calls to stack into a
+// multi-minute production load.
+const TIMEOUT_MS = 6000;
 
 /**
  * Upstream is not always healthy — some queries (search=swap, for one) never
@@ -250,6 +255,14 @@ export type ListOptions = {
   limit?: number;
   offset?: number;
   sort?: "total_score" | "created_at" | "total_feedbacks";
+  /**
+   * Cache policy override. USER searches stay uncacheable (a hung upstream
+   * would otherwise poison the shared entry), but OUR OWN catalogue queries are
+   * a fixed, known set and must hit Next's persistent Data Cache — otherwise
+   * every serverless cold start re-runs the whole fan-out against upstream,
+   * which is what made production take minutes to load.
+   */
+  cache?: number | "no-store";
 };
 
 /** Raw page from the registry, classified. Unclassifiable agents are dropped. */
@@ -270,20 +283,21 @@ export async function listAgents(o: ListOptions = {}): Promise<AgentPage> {
 
   const key = params.toString();
   const isSearch = Boolean(o.search?.trim());
+  const policy = o.cache ?? (isSearch ? "no-store" : 300);
 
-  if (isSearch) {
+  if (isSearch && policy === "no-store") {
     const hit = searchMemo.get(key);
     if (hit && Date.now() - hit.at < SEARCH_TTL) return hit.value;
   }
 
-  const json = await get<RawList>(`/agents?${key}`, isSearch ? "no-store" : 300);
+  const json = await get<RawList>(`/agents?${key}`, policy);
   const agents: Agent[] = [];
   for (const item of json.items ?? []) {
     const cls = classify(item);
     if (cls) agents.push(mapAgent(item, cls, false));
   }
   const page = { agents, total: json.total ?? agents.length, offset, limit };
-  if (isSearch) searchMemo.set(key, { at: Date.now(), value: page });
+  if (isSearch && policy === "no-store") searchMemo.set(key, { at: Date.now(), value: page });
   return page;
 }
 
@@ -293,11 +307,14 @@ export async function listAgents(o: ListOptions = {}): Promise<AgentPage> {
  * search instead. Every query runs in parallel — done sequentially this is tens
  * of seconds of latency, which is what made the page hang.
  */
+// Two queries per category, not four. We only surface ~50 agents, so eight
+// upstream calls is plenty — and halving the fan-out halves cold-start latency
+// and the load we put on a registry that is frequently slow.
 const CATEGORY_QUERIES: Record<Category, string[]> = {
-  "health-factor": ["health factor", "lending", "liquidation", "collateral"],
-  rebalancing: ["liquidity", "rebalance", "concentrated liquidity", "v3 position"],
-  grid: ["trading", "grid", "dca", "market making"],
-  yield: ["yield", "staking", "farming", "vault"],
+  "health-factor": ["health factor", "liquidation"],
+  rebalancing: ["liquidity", "rebalance"],
+  grid: ["grid", "trading"],
+  yield: ["yield", "staking"],
 };
 
 const CATS = Object.keys(CATEGORY_QUERIES) as Category[];
@@ -305,54 +322,98 @@ const CATS = Object.keys(CATEGORY_QUERIES) as Category[];
 export type Catalogue = { byCategory: Record<Category, Agent[]>; indexed: number };
 
 type CacheSlot = { at: number; value: Catalogue } | null;
-// 8004scan's search parameter is observed to fail outright for stretches at a
-// time (verified directly: every `search=` query 500s for ~10s while the
-// plain list endpoint stays healthy). SOFT_TTL is how fresh we'd like the
-// catalogue; HARD_TTL is how long we'll keep serving it — genuinely real,
-// just a few minutes old — rather than blanking the whole marketplace while
-// upstream search recovers.
-const SOFT_TTL_MS = 5 * 60_000;
-const HARD_TTL_MS = 60 * 60_000;
 
-// Held on globalThis: in dev, module scope is discarded between requests, so a
-// plain module-level variable means rebuilding the catalogue on every render.
+/**
+ * How long a built catalogue is served before we rebuild. This lives in Next's
+ * Data Cache (persistent and shared across serverless invocations on Vercel),
+ * which is the layer that actually matters in production — a `globalThis`
+ * cache dies with every cold start, so without this every cold request re-ran
+ * the whole upstream fan-out and the deployed site took minutes to load.
+ */
+const CATALOGUE_TTL_S = 600; // 10 minutes
+/** Hard ceiling on a cold build. Partial results beat a hanging page. */
+const BUILD_DEADLINE_MS = 7000;
+/** After a total failure, wait this long before fanning out again. */
+const NEGATIVE_TTL_MS = 30_000;
+
 const store = globalThis as typeof globalThis & {
   __provenCatalogue?: CacheSlot;
-  __provenInflight?: Promise<Catalogue> | null;
+  __provenFailedAt?: number;
 };
+
+const EMPTY = (): Catalogue => ({
+  byCategory: { rebalancing: [], grid: [], yield: [], "health-factor": [] },
+  indexed: 0,
+});
+
+/**
+ * Last-resort seed: real agents baked into the build by `npm run snapshot`.
+ * Covers the one gap our caches can't — a first-ever cold start while the
+ * registry is unreachable, where we'd otherwise render an empty marketplace.
+ *
+ * Raw upstream items are stored, then classified here through the SAME
+ * pipeline as live data, so the snapshot can never drift from our own
+ * categorisation rules. Returns null when the snapshot hasn't been generated.
+ */
+let snapshotMemo: Catalogue | null | undefined;
+function snapshotCatalogue(): Catalogue | null {
+  if (snapshotMemo !== undefined) return snapshotMemo;
+  const raw = snapshotData as { at: number; indexed: number; items: RawAgent[] };
+  if (!raw.items?.length) return (snapshotMemo = null);
+
+  const byCategory = { rebalancing: [], grid: [], yield: [], "health-factor": [] } as Record<Category, Agent[]>;
+  for (const item of raw.items) {
+    const cls = classify(item);
+    if (cls) byCategory[cls.category].push(mapAgent(item, cls, false));
+  }
+  for (const c of CATS) byCategory[c].sort((x, y) => y.score - x.score);
+  const any = CATS.some((c) => byCategory[c].length > 0);
+  return (snapshotMemo = any ? { byCategory, indexed: raw.indexed } : null);
+}
+
+/** Resolve with `fallback` if `p` hasn't settled within `ms`. */
+function withDeadline<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), ms))]);
+}
+
+/**
+ * The persistent layer. `unstable_cache` stores the *built result*, so the
+ * expensive fan-out happens once per TTL for the whole deployment rather than
+ * once per cold start. It only caches successful builds — a throw is never
+ * cached, so an outage can't pin an empty marketplace for 10 minutes.
+ */
+const buildCached = unstable_cache(
+  async () => build(),
+  ["proven:catalogue:v2"],
+  { revalidate: CATALOGUE_TTL_S, tags: ["catalogue"] },
+);
 
 /** The balanced, cached catalogue behind the marketplace. */
 export async function catalogue(): Promise<Catalogue> {
   const cached = store.__provenCatalogue;
-  const age = cached ? Date.now() - cached.at : Infinity;
-  if (cached && age < SOFT_TTL_MS) return cached.value;
 
-  if (cached && age < HARD_TTL_MS) {
-    // Stale but usable: serve it now, refresh quietly in the background.
-    if (!store.__provenInflight) {
-      store.__provenInflight = build()
-        .then((value) => {
-          store.__provenCatalogue = { at: Date.now(), value };
-          return value;
-        })
-        .catch(() => cached.value)
-        .finally(() => {
-          store.__provenInflight = null;
-        });
-    }
-    return cached.value;
+  // Upstream just failed: serve whatever we have and don't re-fan-out for a
+  // while. Prevents every request paying the full timeout during an outage.
+  if (store.__provenFailedAt && Date.now() - store.__provenFailedAt < NEGATIVE_TTL_MS) {
+    return cached?.value ?? snapshotCatalogue() ?? EMPTY();
   }
 
-  if (store.__provenInflight) return store.__provenInflight;
-  store.__provenInflight = build()
-    .then((value) => {
+  try {
+    const value = await buildCached();
+    if (CATS.some((c) => value.byCategory[c].length > 0)) {
       store.__provenCatalogue = { at: Date.now(), value };
+      store.__provenFailedAt = undefined;
       return value;
-    })
-    .finally(() => {
-      store.__provenInflight = null;
-    });
-  return store.__provenInflight;
+    }
+    // Empty but not thrown — treat as degraded.
+    store.__provenFailedAt = Date.now();
+    return cached?.value ?? snapshotCatalogue() ?? value;
+  } catch {
+    store.__provenFailedAt = Date.now();
+    // Last known good, then the baked-in snapshot, then (only if we have
+    // literally nothing) empty. An error screen is the worst option.
+    return cached?.value ?? snapshotCatalogue() ?? EMPTY();
+  }
 }
 
 async function build(): Promise<Catalogue> {
@@ -360,45 +421,54 @@ async function build(): Promise<Catalogue> {
     CATEGORY_QUERIES[category].map((search) => ({ category, search })),
   );
 
-  const [results, count] = await Promise.all([
-    Promise.allSettled(jobs.map((j) => listAgents({ search: j.search, limit: 50 }))),
-    countAll().catch(() => 0),
+  // Collect whatever arrives before the deadline instead of waiting on the
+  // slowest query — a partial catalogue renders, a hung one does not.
+  const collected: AgentPage[] = [];
+  const inflight = jobs.map((j) =>
+    listAgents({ search: j.search, limit: 50, cache: CATALOGUE_TTL_S })
+      .then((page) => { collected.push(page); })
+      .catch(() => {}),
+  );
+
+  const [, count] = await Promise.all([
+    withDeadline(Promise.all(inflight), BUILD_DEADLINE_MS, undefined),
+    withDeadline(countAll().catch(() => 0), BUILD_DEADLINE_MS, 0),
   ]);
 
   const byCategory = { rebalancing: [], grid: [], yield: [], "health-factor": [] } as Record<Category, Agent[]>;
   const seen = new Set<string>();
 
-  results.forEach((r) => {
-    if (r.status !== "fulfilled") return;
-    for (const a of r.value.agents) {
+  for (const page of collected) {
+    for (const a of page.agents) {
       if (seen.has(a.id)) continue;
       // Trust the agent's own classification, not the query that found it.
       seen.add(a.id);
       byCategory[a.category].push(a);
     }
-  });
+  }
 
-  const anySucceeded = results.some((r) => r.status === "fulfilled");
-  if (!anySucceeded) {
+  if (collected.length === 0) {
     // Upstream search is down outright — degrade instead of failing: pull a
     // few unfiltered top-score pages and classify them ourselves. Not as
     // balanced as the targeted searches, but every agent shown is still
     // real, and going a few pages deep gives each category a real shot at
     // being represented rather than just whatever lands on page one.
-    const fallbackPages = await Promise.allSettled(
-      [0, 1, 2].map((i) => listAgents({ limit: MAX_LIMIT, offset: i * MAX_LIMIT, sort: "total_score" })),
+    const fallback: AgentPage[] = [];
+    const pages = [0, 1, 2].map((i) =>
+      listAgents({ limit: MAX_LIMIT, offset: i * MAX_LIMIT, sort: "total_score", cache: CATALOGUE_TTL_S })
+        .then((p) => { fallback.push(p); })
+        .catch(() => {}),
     );
-    for (const r of fallbackPages) {
-      if (r.status !== "fulfilled") continue;
-      for (const a of r.value.agents) byCategory[a.category].push(a);
+    await withDeadline(Promise.all(pages), BUILD_DEADLINE_MS, undefined);
+    for (const p of fallback) {
+      for (const a of p.agents) byCategory[a.category].push(a);
     }
 
     // Even the fallback found nothing real — 8004scan is genuinely
     // unreachable right now, not just its search parameter. Throw so this
     // never gets cached as a hollow "0 agents" success.
     if (CATS.every((c) => byCategory[c].length === 0)) {
-      const first = fallbackPages.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
-      throw first?.reason ?? new ScanError(502, "8004scan unreachable");
+      throw new ScanError(502, "8004scan unreachable");
     }
   }
 

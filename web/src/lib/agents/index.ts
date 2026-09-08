@@ -62,26 +62,48 @@ export async function browse(opts: {
     // capabilities or health — only its detail endpoint does. The featured
     // strip is small and fixed (one per category), so it is worth the extra
     // round trip to show real tools instead of an empty "no interface" card.
-    const featured: Partial<Record<Category, Agent>> = {};
-    await Promise.all(
-      CATS.map(async (c) => {
-        const top = byCategory[c][0];
-        if (!top) return;
-        const detailed = await getAgentDetail(top.contract, top.tokenId).catch(() => null);
-        featured[c] = detailed ?? top;
-      }),
-    );
-
     const base = opts.category
       ? byCategory[opts.category].slice(0, 48)
       : CATS.flatMap((c) => byCategory[c].slice(0, 12));
+
+    // catalogue() degrades rather than throwing, so an empty result here means
+    // the registry is unreachable AND we have nothing cached to fall back on.
+    // Bail out before the enrichment below — there is nothing to enrich, and
+    // waiting on it would just add its deadline to an already-failing page.
+    if (base.length === 0) {
+      return {
+        agents: [], indexed, featured: {},
+        error: "The ERC-8004 registry is temporarily unreachable. This is upstream of us — the marketplace will fill back in automatically as soon as it responds.",
+      };
+    }
+
+    // Populate the featured strip from the catalogue we already hold, so it
+    // renders instantly. The detail fetch (which adds tools/health) is an
+    // enrichment on top, bounded by a short deadline — previously these four
+    // extra round trips blocked the whole page behind a slow registry.
+    const featured: Partial<Record<Category, Agent>> = {};
+    for (const c of CATS) {
+      const top = byCategory[c][0];
+      if (top) featured[c] = top;
+    }
+    await Promise.race([
+      Promise.all(
+        CATS.map(async (c) => {
+          const top = byCategory[c][0];
+          if (!top) return;
+          const detailed = await getAgentDetail(top.contract, top.tokenId).catch(() => null);
+          if (detailed) featured[c] = detailed;
+        }),
+      ),
+      new Promise((r) => setTimeout(r, 1200)),
+    ]);
 
     return { agents: applyView(base, opts.sort, opts.filters), indexed, featured };
   } catch (e) {
     const msg =
       e instanceof ScanError
         ? e.status === 504
-          ? "The registry did not respond in time. Some search terms are slow upstream — try another."
+          ? "The registry didn't respond in time. Showing what we have cached — it'll refresh automatically."
           : `Registry unavailable (8004scan returned ${e.status}).`
         : "Registry unavailable.";
     return { agents: [], indexed: 0, error: msg };

@@ -67,6 +67,7 @@ export default async function Home({
               num={isMatchCount ? indexed : indexed / 1000}
               suffix={isMatchCount ? "" : "K"}
               decimals={isMatchCount ? 0 : 1}
+              unknown={indexed === 0}
             />
             <Stat label="Shown here" num={agents.length} accent />
             <Stat label="Accept x402 payment" num={withX402} />
@@ -157,15 +158,17 @@ export default async function Home({
 }
 
 function Stat({
-  label, num, accent, suffix, decimals,
+  label, num, accent, suffix, decimals, unknown,
 }: {
   label: string; num: number; accent?: boolean; suffix?: string; decimals?: number;
+  /** True when we have no figure at all — show a dash, never a fake "0.0K". */
+  unknown?: boolean;
 }) {
   return (
     <div className="card card-hover px-5 py-4">
       <div className="eyebrow">{label}</div>
-      <div className={`stat-value mt-2 text-3xl font-semibold ${accent ? "text-cosmic" : "text-fg"}`}>
-        <CountUp value={num} suffix={suffix} decimals={decimals} />
+      <div className={`stat-value mt-2 text-3xl font-semibold ${unknown ? "text-muted" : accent ? "text-cosmic" : "text-fg"}`}>
+        {unknown ? "—" : <CountUp value={num} suffix={suffix} decimals={decimals} />}
       </div>
     </div>
   );
